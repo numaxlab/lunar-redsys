@@ -1,0 +1,29 @@
+{
+    "name": "numaxlab/lunar-redsys",
+    "version": "1.0.0-beta.1",
+    "description": "Lunar Redsys payment driver",
+    "type": "library",
+    "require": {
+        "lunarphp/core": "^1.0",
+        "sermepa/sermepa": "^1.5"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "NumaxLab\\Lunar\\Redsys\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "NumaxLab\\Lunar\\Redsys\\LunarRedsysServiceProvider"
+            ]
+        }
+    },
+    "authors": [
+        {
+            "name": "Adrián P. Blunier",
+            "email": "adrian@numax.org"
+        }
+    ]
+}
