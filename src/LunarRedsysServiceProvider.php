@@ -20,8 +20,6 @@ class LunarRedsysServiceProvider extends ServiceProvider
 
         $this->loadRoutesFrom(__DIR__.'/../routes/webhooks.php');
 
-        $this->mergeConfigFrom(__DIR__.'/../config/redsys.php', 'lunar.redsys');
-
         $this->publishes([
             __DIR__.'/../config/redsys.php' => config_path('lunar/redsys.php'),
         ], ['lunar']);

@@ -11,6 +11,7 @@ use Lunar\Models\Contracts\Transaction as TransactionContract;
 use Lunar\Models\Order;
 use Lunar\Models\Transaction;
 use Lunar\PaymentTypes\AbstractPayment;
+use NumaxLab\Lunar\Redsys\Responses\RedirectToPaymentGateway;
 use Sermepa\Tpv\Tpv;
 
 class RedsysPayment extends AbstractPayment
@@ -35,10 +36,10 @@ class RedsysPayment extends AbstractPayment
 
     public function authorize(): ?PaymentAuthorize
     {
-        if (!$this->order) {
+        if (! $this->order) {
             $this->order = $this->cart->draftOrder()->first();
 
-            if (!$this->order) {
+            if (! $this->order) {
                 $this->order = $this->cart->createOrder();
             }
         }
@@ -46,7 +47,7 @@ class RedsysPayment extends AbstractPayment
         if ($this->order->isPlaced()) {
             $failure = new PaymentAuthorize(
                 success: false,
-                message: 'Order already placed',
+                message: 'This order has already been placed',
                 orderId: $this->order->id,
                 paymentType: static::DRIVER_NAME,
             );
@@ -78,27 +79,27 @@ class RedsysPayment extends AbstractPayment
 
         $this->redsys->setAmount($this->order->total->decimal);
         $this->redsys->setOrder($reference);
-        $this->redsys->setMerchantcode(config("lunar.redsys.{$this->data['config_key']}.merchant_code"));
-        $this->redsys->setCurrency(config("lunar.redsys.{$this->data['config_key']}.currency"));
+        $this->redsys->setMerchantcode(config("services.redsys.{$this->data['config_key']}.merchant_code"));
+        $this->redsys->setCurrency(config("services.redsys.{$this->data['config_key']}.currency"));
         $this->redsys->setTransactiontype('0');
-        $this->redsys->setTerminal(config("lunar.redsys.{$this->data['config_key']}.terminal"));
+        $this->redsys->setTerminal(config("services.redsys.{$this->data['config_key']}.terminal"));
         $this->redsys->setMethod($this->data['method']);
         $this->redsys->setNotification(route('lunar.redsys.webhook'));
         $this->redsys->setUrlOk($this->data['url_ok']);
         $this->redsys->setUrlKo($this->data['url_ko']);
         $this->redsys->setVersion('HMAC_SHA256_V1');
-        $this->redsys->setTradeName(config("lunar.redsys.{$this->data['config_key']}.trade_name"));
-        $this->redsys->setTitular(config("lunar.redsys.{$this->data['config_key']}.owner"));
+        $this->redsys->setTradeName(config("services.redsys.{$this->data['config_key']}.trade_name"));
+        $this->redsys->setTitular(config("services.redsys.{$this->data['config_key']}.owner"));
         $this->redsys->setProductDescription($this->data['product_description']);
-        $this->redsys->setEnvironment(config("lunar.redsys.{$this->data['config_key']}.environment"));
+        $this->redsys->setEnvironment(config("services.redsys.{$this->data['config_key']}.environment"));
 
         $this->redsys->setMerchantSignature(
-            $this->redsys->generateMerchantSignature(config("lunar.redsys.{$this->data['config_key']}.key")),
+            $this->redsys->generateMerchantSignature(config("services.redsys.{$this->data['config_key']}.key")),
         );
 
-        $response = new PaymentAuthorize(
+        $response = new RedirectToPaymentGateway(
             success: true,
-            message: 'Redirected to payment gateway',
+            message: 'Redirecting to payment gateway',
             orderId: $this->order->id,
             paymentType: static::DRIVER_NAME,
         );
@@ -122,7 +123,7 @@ class RedsysPayment extends AbstractPayment
 
         $key = config("lunar.redsys.{$transaction->meta['config_key']}.key");
 
-        if (!$this->redsys->check($key, $this->data['request']) || $response > 99) {
+        if (! $this->redsys->check($key, $this->data['request']) || $response > 99) {
             $transaction->update([
                 'status' => $parameters['Ds_Response'],
             ]);
