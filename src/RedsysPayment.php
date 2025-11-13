@@ -160,6 +160,13 @@ class RedsysPayment extends AbstractPayment
             'parent_transaction_id' => $transaction->id,
         ]);
 
+        $cart = $this->order->cart;
+
+        if ($cart) {
+            $cart->clear();
+            $cart->delete();
+        }
+
         return new PaymentCapture(success: true);
     }
 
