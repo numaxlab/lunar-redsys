@@ -3,10 +3,13 @@
 namespace NumaxLab\Lunar\Redsys;
 
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Lunar\Base\DataTransferObjects\PaymentAuthorize;
 use Lunar\Base\DataTransferObjects\PaymentCapture;
 use Lunar\Base\DataTransferObjects\PaymentRefund;
 use Lunar\Events\PaymentAttemptEvent;
+use Lunar\Models\Contracts\Cart;
 use Lunar\Models\Contracts\Transaction as TransactionContract;
 use Lunar\Models\Order;
 use Lunar\Models\Transaction;
@@ -121,15 +124,20 @@ class RedsysPayment extends AbstractPayment
 
         $this->order(Order::findOrFail($transaction->order_id));
 
-        $key = config("lunar.redsys.{$transaction->meta['config_key']}.key");
+        $key = config("services.redsys.{$transaction->meta['config_key']}.key");
 
         if (! $this->redsys->check($key, $this->data['request']) || $response > 99) {
             $transaction->update([
                 'status' => $parameters['Ds_Response'],
+                'notes' => 'Error en la validación de la firma o el pago fue rechazado',
             ]);
+
+            $this->clearCart($this->order->cart);
 
             return new PaymentCapture(success: false);
         }
+
+        Log::debug(json_encode($parameters));
 
         $orderMeta = array_merge(
             (array) $this->order->meta,
@@ -137,6 +145,8 @@ class RedsysPayment extends AbstractPayment
         );
 
         $status = $this->data['authorized'] ?? null;
+
+        DB::beginTransaction();
 
         $this->order->update([
             'status' => $status ?? ($this->config['authorized'] ?? null),
@@ -148,6 +158,19 @@ class RedsysPayment extends AbstractPayment
             'captured_at' => now(),
         ]);
 
+        $cartType = '--';
+
+        if (array_key_exists('Ds_Card_Brand', $parameters)) {
+            $cartType = $parameters['Ds_Card_Brand'];
+            if (array_key_exists('Ds_Card_Type', $parameters)) {
+                $cartType .= ' - '.$parameters['Ds_Card_Type'];
+            }
+        } else {
+            if (array_key_exists('Ds_Bizum_MobileNumber', $parameters)) {
+                $cartType = 'Bizum';
+            }
+        }
+
         Transaction::create([
             'success' => true,
             'type' => 'capture',
@@ -155,17 +178,14 @@ class RedsysPayment extends AbstractPayment
             'order_id' => $this->order->id,
             'amount' => $amount,
             'reference' => $transaction->reference,
-            'card_type' => $parameters['Ds_Card_Brand'].' - '.$parameters['Ds_Card_Type'],
             'status' => $parameters['Ds_Response'],
+            'card_type' => $cartType,
             'parent_transaction_id' => $transaction->id,
         ]);
 
-        $cart = $this->order->cart;
+        DB::commit();
 
-        if ($cart) {
-            $cart->clear();
-            $cart->delete();
-        }
+        $this->clearCart($this->order->cart);
 
         return new PaymentCapture(success: true);
     }
@@ -173,5 +193,13 @@ class RedsysPayment extends AbstractPayment
     public function getMerchantParameters(): array
     {
         return $this->redsys->getMerchantParameters($this->data['Ds_MerchantParameters']);
+    }
+
+    private function clearCart(?Cart $cart): void
+    {
+        if ($cart) {
+            $cart->clear();
+            $cart->delete();
+        }
     }
 }
