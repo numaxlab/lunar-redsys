@@ -1,6 +1,5 @@
 {
     "name": "numaxlab/lunar-redsys",
-    "version": "1.0.0-beta.1",
     "description": "Lunar Redsys payment driver",
     "type": "library",
     "require": {
