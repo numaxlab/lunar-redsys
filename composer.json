@@ -7,10 +7,22 @@
         "lunarphp/core": "^1.0",
         "sermepa/sermepa": "^1.5"
     },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5",
+        "pestphp/pest": "^3.8",
+        "pestphp/pest-plugin-laravel": "^3.2",
+        "orchestra/testbench": "^10.4",
+        "mockery/mockery": "^1.6"
+    },
     "license": "MIT",
     "autoload": {
         "psr-4": {
             "NumaxLab\\Lunar\\Redsys\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "NumaxLab\\Lunar\\Redsys\\Tests\\": "tests/"
         }
     },
     "extra": {
@@ -25,5 +37,13 @@
             "name": "Adrián P. Blunier",
             "email": "adrian@numax.org"
         }
-    ]
+    ],
+    "scripts": {
+        "test": "vendor/bin/pest"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
 }
