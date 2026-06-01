@@ -14,6 +14,7 @@ use Lunar\Models\Contracts\Transaction as TransactionContract;
 use Lunar\Models\Order;
 use Lunar\Models\Transaction;
 use Lunar\PaymentTypes\AbstractPayment;
+use NumaxLab\Lunar\Redsys\Events\RedsysMerchantIdentifierReceived;
 use NumaxLab\Lunar\Redsys\Responses\RedirectToPaymentGateway;
 use Sermepa\Tpv\Tpv;
 
@@ -39,6 +40,18 @@ class RedsysPayment extends AbstractPayment
 
     public function authorize(): ?PaymentAuthorize
     {
+        if ($this->isCofRequested() && ! $this->isCofEnabled()) {
+            $failure = new PaymentAuthorize(
+                success: false,
+                message: 'COF recurring payments are not enabled for this terminal. Check services.redsys.{config_key}.cof_enabled.',
+                paymentType: static::DRIVER_NAME,
+            );
+
+            PaymentAttemptEvent::dispatch($failure);
+
+            return $failure;
+        }
+
         if (! $this->order) {
             $this->order = $this->cart->draftOrder()->first();
 
@@ -95,6 +108,11 @@ class RedsysPayment extends AbstractPayment
         $this->redsys->setTitular(config("services.redsys.{$this->data['config_key']}.owner"));
         $this->redsys->setProductDescription($this->data['product_description']);
         $this->redsys->setEnvironment(config("services.redsys.{$this->data['config_key']}.environment"));
+
+        if ($this->isCofRequested()) {
+            $this->redsys->setMerchantCofIni('S');
+            $this->redsys->setMerchantCofType('R');
+        }
 
         $this->redsys->setMerchantSignature(
             $this->redsys->generateMerchantSignature(config("services.redsys.{$this->data['config_key']}.key")),
@@ -185,6 +203,12 @@ class RedsysPayment extends AbstractPayment
 
         DB::commit();
 
+        $identifier = $this->extractMerchantIdentifier($this->data['Ds_MerchantParameters']);
+
+        if ($identifier !== null) {
+            RedsysMerchantIdentifierReceived::dispatch($this->order->id, $identifier);
+        }
+
         $this->clearCart($this->order->cart);
 
         return new PaymentCapture(success: true);
@@ -195,11 +219,38 @@ class RedsysPayment extends AbstractPayment
         return $this->redsys->getMerchantParameters($this->data['Ds_MerchantParameters']);
     }
 
+    /**
+     * Extract the Ds_Merchant_Identifier token from an encoded merchant parameters string.
+     * Returns null if the identifier is not present in the response (non-COF transactions).
+     */
+    public function extractMerchantIdentifier(string $encodedParameters): ?string
+    {
+        $parameters = $this->redsys->getMerchantParameters($encodedParameters);
+
+        return $parameters['Ds_Merchant_Identifier'] ?? null;
+    }
+
     private function clearCart(?Cart $cart): void
     {
         if ($cart) {
             $cart->clear();
             $cart->delete();
         }
+    }
+
+    private function isCofRequested(): bool
+    {
+        return ! empty($this->data['is_cof']);
+    }
+
+    private function isCofEnabled(): bool
+    {
+        $configKey = $this->data['config_key'] ?? null;
+
+        if ($configKey === null) {
+            return false;
+        }
+
+        return (bool) config("services.redsys.{$configKey}.cof_enabled", false);
     }
 }
